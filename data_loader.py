@@ -1,4 +1,4 @@
-import csv
+import pandas as pd
 
 class Loader:
     def __init__(self, data_file_path:str):
@@ -9,8 +9,10 @@ class Loader:
         data = []
 
         with open(self.data_file_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)    
-            for row in reader:
-                data.append(row)
-        
+            df = pd.read_csv(f)
+            df["sentiment"] = "unprocessed"
+            df["weapons_detected"] = "unprocessed"
+
+            data = df.to_dict('records')    
+   
         return data
