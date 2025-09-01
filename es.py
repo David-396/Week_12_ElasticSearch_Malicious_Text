@@ -52,32 +52,59 @@ class ElasticConnector:
             ids.append(meta['_id'])
         return ids
 
-
     # return a document that match to the given id
     def get_all_docs(self, index_name:str):
         docs = self.es_client.search(index=index_name)
         return docs
 
-    # get a document by id
-    def update_docs(self, index_name:str, docs:list, process_col:str, callback):
+    # update a list of docs
+    def update_docs(self, index_name:str, docs:list, process_col:str, callback=None, updated_val=None):
 
         actions = []
+        i = 0
         for hit in docs:
             doc_id = hit["_id"]
             doc = hit["_source"]
 
             old_val = doc[process_col]
-            new_val = callback(old_val)
+
+            new_val = updated_val if updated_val else callback(old_val)
 
             action = {
                 "_op_type": "update",
                 "_index": index_name,
                 "_id": doc_id,
-                "doc": {process_col: new_val}
+                "doc": {process_col: new_val[i] if isinstance(updated_val, list) else new_val}
             }
             actions.append(action)
 
+            i += 1
+
         helpers.bulk(self.es_client, actions)
+
         self.es_client.indices.refresh(index=index_name)
 
         print(f'{len(docs)} documents has updated.')
+
+    # update one doc
+    def update_doc(self, index_name:str, doc:dict, process_col:str, callback=None, updated_val=None):
+        doc_id = doc["_id"]
+        doc = doc["_source"]
+
+        old_val = doc[process_col]
+
+        new_val = updated_val if updated_val else callback(old_val)
+
+        script = {"source": f"ctx._source.{process_col} = params.{process_col}",
+                  "params": {f"{process_col}": new_val} }
+        response = self.es_client.update(index=index_name, id=doc_id, script=script)
+
+        self.es_client.indices.refresh(index=index_name)
+
+        print(f'{doc_id} document has updated.')
+
+        return response
+
+    # delete docs by query
+    def delete_docs(self, index_name:str, query:dict):
+        self.es_client.delete_by_query(index=index_name, body=query)

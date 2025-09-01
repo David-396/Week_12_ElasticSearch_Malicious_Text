@@ -2,52 +2,52 @@ from data_loader import Loader
 from es import ElasticConnector
 from process import Process
 
-data_file_path = r'data\tweets_injected 3.csv'
-loader = Loader(data_file_path=data_file_path)
-data = loader.load()
 
-index_name = 'sentiment_weapons_analyzer'
-mapping = {
-    "properties": {
-        "TweetID": {"type": "float"},
-        "CreateDate": {"type": "text"},
-        "Antisemitic": {"type": "integer"},
-        "text": {"type": "text"},
-        "sentiment": {"type": "keyword"},
-        "weapons_detected": {"type": "text"}
-    }
-}
+class Manager:
+    def __init__(self,
+                 data_file_path:str,
+                 index_name:str,
+                 index_mapping:dict,
+                 index_settings:dict,
+                 es_host:str,
+                 es_port:str,
+                 text_col:str,
+                 sentiment_col:str,
+                 weapons_col:str,
+                 weapon_list_file_path:str,
+                 delete_query:dict):
 
-settings = {
-    "index": {
-        "number_of_shards": 3,
-        "number_of_replicas": 2
-    }
-}
+        self.index_name = index_name
+        self.index_mapping = index_mapping
+        self.index_settings = index_settings
+        self.loader = Loader(data_file_path=data_file_path)
+        self.text_col = text_col
+        self.sentiment_col = sentiment_col
+        self.weapons_col = weapons_col
+        self.delete_query = delete_query
+        self.data = self.loader.load()
+        self.client = ElasticConnector(es_host=es_host, es_port=es_port)
+        self.es_obj = self.client.es_client
+        self.processor = Process(weapon_list_file_path=weapon_list_file_path)
 
-es_host = 'localhost'
-es_port = '9200'
 
-client = ElasticConnector(es_host=es_host, es_port=es_port)
-es_obj = client.es_client
+    # main func
+    def run(self):
+        # create a new index if not exist
+        if not self.client.es_client.indices.exists(index=self.index_name):
+            self.client.create_index(index_name=self.index_name, mapping=self.index_mapping, settings=self.index_settings)
 
-es_obj.indices.delete(index=index_name, ignore_unavailable=True)
+        # insert all the docs
+        self.client.insert_docs(index_name=self.index_name, docs=self.data[:100])
 
-if not client.es_client.indices.exists(index=index_name):
-    client.create_index(index_name=index_name, mapping=mapping, settings=settings)
+        # get the whole docs to process them
+        all_docs = self.es_obj.search(index=self.index_name, size=10000)["hits"]["hits"]
 
-    client.insert_docs(index_name=index_name, docs=data[:3])
+        # update the docs by a function - process #1
+        self.client.update_docs(index_name=self.index_name, docs=all_docs, process_col=self.sentiment_col, callback=self.processor.identify_sentiment)
 
-    ids = client.get_ids(index_name=index_name)
-    print(ids)
+        # update the docs by a function - process #2
+        self.processor.identify_weapons(es_obj=self.client, index_name=self.index_name, searched_col=self.text_col, assigning_col=self.weapons_col)
 
-    all_docs = es_obj.search(index=index_name)["hits"]["hits"]
-    print(all_docs)
-
-    processor = Process(weapon_list_file_path=r'data\weapon_list.txt')
-    client.update_docs(index_name=index_name, docs=all_docs, process_col='sentiment', callback=processor.identify_sentiment)
-    es_obj.indices.refresh(index=index_name)
-
-    all_docs = es_obj.search(index=index_name)["hits"]["hits"]
-    print(all_docs)
-
+        # delete docs by query
+        self.client.delete_docs(index_name=self.index_name, query=self.delete_query)
