@@ -38,7 +38,7 @@ class Manager:
             self.client.create_index(index_name=self.index_name, mapping=self.index_mapping, settings=self.index_settings)
 
         # insert all the docs
-        self.client.insert_docs(index_name=self.index_name, docs=self.data[:100])
+        self.client.insert_docs(index_name=self.index_name, docs=self.data)
 
         # get the whole docs to process them
         all_docs = self.es_obj.search(index=self.index_name, size=10000)["hits"]["hits"]
