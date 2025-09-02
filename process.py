@@ -60,6 +60,9 @@ class Process:
                 weapon_detect = ' '.join(re.findall(r"<em>(.*?)</em>", weapon))
                 weapons_detected += ' ' + weapon_detect
 
+            if weapons_detected == '':
+                weapons_detected = 'None'
+
             weapons_detected_list.append(weapons_detected)
 
         es_obj.update_docs(index_name=index_name, docs=docs_found, process_col=assigning_col, updated_val=weapons_detected_list)
