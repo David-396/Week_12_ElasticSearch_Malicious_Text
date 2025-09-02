@@ -1,5 +1,4 @@
 import os
-
 from manager import Manager
 
 WEAPON_LIST_FILE_PATH = os.environ.get('WEAPON_LIST_FILE_PATH', r'data\weapon_list.txt')
