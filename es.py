@@ -52,7 +52,7 @@ class ElasticConnector:
             ids.append(meta['_id'])
         return ids
 
-    # return a document that match to the given id
+    # return all documents
     def get_all_docs(self, index_name:str):
         docs = self.es_client.search(index=index_name)
         return docs
